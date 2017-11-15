@@ -12,7 +12,7 @@ import           Universum
 
 import           Control.Concurrent           (modifyMVar_)
 import           Control.Concurrent.Async     (Async, async, cancel, poll, wait, waitAny,
-                                               withAsyncWithUnmask)
+                                               withAsyncWithUnmask, withAsync)
 import           Data.List                    (isSuffixOf)
 import qualified Data.Text.IO                 as T
 import qualified Data.Text.Lazy.IO            as TL
@@ -31,7 +31,8 @@ import           System.Environment           (getExecutablePath)
 import           System.Exit                  (ExitCode (..))
 import           System.FilePath              (normalise, (</>))
 import qualified System.IO                    as IO
-import           System.Process               (ProcessHandle, readProcessWithExitCode)
+import           System.Process               (ProcessHandle, runInteractiveProcess,
+                                              readProcessWithExitCode, waitForProcess)
 import qualified System.Process               as Process
 import           System.Timeout               (timeout)
 import           System.Wlog                  (lcFilePrefix, usingLoggerName)
@@ -61,6 +62,7 @@ data LauncherOptions = LO
     , loNodeLogPath         :: !(Maybe FilePath)
     , loWalletPath          :: !(Maybe FilePath)
     , loWalletArgs          :: ![Text]
+    , loWalletLogging       :: !(Maybe String)
     , loUpdaterPath         :: !FilePath
     , loUpdaterArgs         :: ![Text]
     , loUpdateArchive       :: !(Maybe FilePath)
@@ -102,6 +104,10 @@ optionsParser = do
     loWalletArgs <- many $ textOption $
         short   'w' <>
         help    "An argument to be passed to the wallet." <>
+        metavar "ARG"
+    loWalletLogging <- optional $ textOption $
+        long    "wlogging" <>
+        help    "Logging flag for the launcher wallet." <>
         metavar "ARG"
 
     -- Update-related args
@@ -212,6 +218,7 @@ main = do
                     , loUpdateArchive)
                     loNodeTimeoutSec
                     loReportServer
+                    loWalletLogging
   where
     -- We propagate configuration options to the node executable,
     -- because we almost certainly want to use the same configuration
@@ -281,11 +288,12 @@ clientScenario
     -- ^ Updater, args, updater runner, the update .tar
     -> Int                                 -- ^ Node timeout, in seconds
     -> Maybe String                        -- ^ Report server
+    -> Maybe String                        -- ^ Wallet logging
     -> IO ()
-clientScenario logConf node wallet updater nodeTimeout report = do
+clientScenario logConf node wallet updater nodeTimeout report walletLog = do
     runUpdater updater
     (nodeHandle, nodeAsync, nodeLog) <- spawnNode node
-    walletAsync <- async (runWallet wallet)
+    walletAsync <- async (runWallet (isJust walletLog) wallet)
     (someAsync, exitCode) <- liftIO $ waitAny [nodeAsync, walletAsync]
     if | someAsync == nodeAsync -> do
              TL.putStrLn $ format ("The node has exited with "%shown) exitCode
@@ -302,7 +310,7 @@ clientScenario logConf node wallet updater nodeTimeout report = do
              liftIO $ do
                  Process.terminateProcess nodeHandle
                  cancel nodeAsync
-             clientScenario logConf node wallet updater nodeTimeout report
+             clientScenario logConf node wallet updater nodeTimeout report walletLog
        | otherwise -> do
              TL.putStrLn $ format ("The wallet has exited with "%shown) exitCode
              -- TODO: does the wallet have some kind of log?
@@ -405,10 +413,16 @@ spawnNode (path, args, mbLogPath) = do
             putText "Node started"
             return (ph, asc, logPath)
 
-runWallet :: (FilePath, [Text]) -> IO ExitCode
-runWallet (path, args) = do
+runWallet :: Bool -> (FilePath, [Text]) -> IO ExitCode
+runWallet shouldLog (path, args) = do
     putText "Starting the wallet"
-    view _1 <$> readProcessWithExitCode path (map toString args) mempty
+    if shouldLog then do
+        (_, stdO, stdE, pid) <- runInteractiveProcess path (map toString args) Nothing Nothing
+        withAsync (forever $ IO.hGetLine stdO >>= IO.hPutStrLn stdout) $ \_ ->
+            withAsync (forever $ IO.hGetLine stdE >>= IO.hPutStrLn stderr) $ \_ -> do
+            waitForProcess pid
+    else
+       view _1 <$> readProcessWithExitCode path (map toString args) mempty
 
 ----------------------------------------------------------------------------
 -- Working with the report server
