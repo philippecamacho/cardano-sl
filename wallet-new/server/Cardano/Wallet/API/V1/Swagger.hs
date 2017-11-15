@@ -428,7 +428,7 @@ api = toSwagger walletAPI
   & info.version .~ "2.0"
   & host ?~ "127.0.0.1:8090"
   & info.description ?~ (highLevelDescription $ DescriptionEnvironment {
-      errorExample = toS $ encodePretty Errors.walletNotFound
+      errorExample = toS $ encodePretty Errors.WalletNotFound
     , defaultPerPage = fromString (show defaultPerPageEntries)
     , accountExample = toS $ encodePretty (genExample @[Account])
     , accountExtendedExample = toS $ encodePretty (genExample @(ExtendedResponse [Account]))
