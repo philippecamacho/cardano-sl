@@ -24,7 +24,7 @@ import           Options.Applicative          (Mod, OptionFields, Parser, auto,
                                                execParser, footerDoc, fullDesc, header,
                                                help, helper, info, infoOption, long,
                                                metavar, option, progDesc, short,
-                                               strOption)
+                                               switch, strOption)
 import           System.Directory             (createDirectoryIfMissing, doesFileExist,
                                                getTemporaryDirectory, removeFile)
 import           System.Environment           (getExecutablePath)
@@ -62,7 +62,7 @@ data LauncherOptions = LO
     , loNodeLogPath         :: !(Maybe FilePath)
     , loWalletPath          :: !(Maybe FilePath)
     , loWalletArgs          :: ![Text]
-    , loWalletLogging       :: !(Maybe String)
+    , loWalletLogging       :: !Bool
     , loUpdaterPath         :: !FilePath
     , loUpdaterArgs         :: ![Text]
     , loUpdateArchive       :: !(Maybe FilePath)
@@ -105,10 +105,9 @@ optionsParser = do
         short   'w' <>
         help    "An argument to be passed to the wallet." <>
         metavar "ARG"
-    loWalletLogging <- optional $ textOption $
+    loWalletLogging <- switch $
         long    "wlogging" <>
-        help    "Logging flag for the launcher wallet." <>
-        metavar "ARG"
+        help    "Logging flag for the launcher wallet."
 
     -- Update-related args
     loUpdaterPath <- textOption $
@@ -288,12 +287,12 @@ clientScenario
     -- ^ Updater, args, updater runner, the update .tar
     -> Int                                 -- ^ Node timeout, in seconds
     -> Maybe String                        -- ^ Report server
-    -> Maybe String                        -- ^ Wallet logging
+    -> Bool                                -- ^ Wallet logging
     -> IO ()
 clientScenario logConf node wallet updater nodeTimeout report walletLog = do
     runUpdater updater
     (nodeHandle, nodeAsync, nodeLog) <- spawnNode node
-    walletAsync <- async (runWallet (isJust walletLog) wallet)
+    walletAsync <- async (runWallet walletLog wallet)
     (someAsync, exitCode) <- liftIO $ waitAny [nodeAsync, walletAsync]
     if | someAsync == nodeAsync -> do
              TL.putStrLn $ format ("The node has exited with "%shown) exitCode
