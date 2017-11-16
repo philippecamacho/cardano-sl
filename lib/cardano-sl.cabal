@@ -41,6 +41,9 @@ library
 
                         Pos.Delegation
 
+                        -- Diffusion layer
+                        Pos.Diffusion.Types
+
                         -- Arbitrary data generation
                         Pos.Generator
                         Pos.Generator.Block
@@ -50,6 +53,9 @@ library
                         -- GState
                         Pos.GState
                         Pos.GState.BlockExtra
+
+                        -- Logic layer
+                        Pos.Logic.Types
 
                         -- LRC
                         Pos.Lrc
