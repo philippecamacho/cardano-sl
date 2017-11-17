@@ -417,11 +417,16 @@ runWallet shouldLog (path, args) = do
     putText "Starting the wallet"
     if shouldLog then do
         (_, stdO, stdE, pid) <- runInteractiveProcess path (map toString args) Nothing Nothing
-        withAsync (forever $ IO.hGetLine stdO >>= IO.hPutStrLn stdout) $ \_ ->
-            withAsync (forever $ IO.hGetLine stdE >>= IO.hPutStrLn stderr) $ \_ -> do
+        withAsync (forever $ IO.hGetLine stdO >>= \bs -> IO.hPutStrLn stdout (tagLogOutput "[wallet] " bs)) $ \_ ->
+            withAsync (forever $ IO.hGetLine stdE >>= \bs -> IO.hPutStrLn stderr (tagLogOutput "[wallet err] " bs)) $ \_ -> do
             waitForProcess pid
     else
        view _1 <$> readProcessWithExitCode path (map toString args) mempty
+
+
+-- add prefix to log output
+tagLogOutput :: String -> String -> String
+tagLogOutput tag bs = tag <> bs
 
 ----------------------------------------------------------------------------
 -- Working with the report server
