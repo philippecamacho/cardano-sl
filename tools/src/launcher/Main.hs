@@ -312,7 +312,6 @@ clientScenario logConf node wallet updater nodeTimeout report walletLog = do
              clientScenario logConf node wallet updater nodeTimeout report walletLog
        | otherwise -> do
              TL.putStrLn $ format ("The wallet has exited with "%shown) exitCode
-             -- TODO: does the wallet have some kind of log?
              putText "Killing the node"
              liftIO $ do
                  Process.terminateProcess nodeHandle
@@ -417,16 +416,11 @@ runWallet shouldLog (path, args) = do
     putText "Starting the wallet"
     if shouldLog then do
         (_, stdO, stdE, pid) <- runInteractiveProcess path (map toString args) Nothing Nothing
-        withAsync (forever $ IO.hGetLine stdO >>= \bs -> IO.hPutStrLn stdout (tagLogOutput "[wallet] " bs)) $ \_ ->
-            withAsync (forever $ IO.hGetLine stdE >>= \bs -> IO.hPutStrLn stderr (tagLogOutput "[wallet err] " bs)) $ \_ -> do
+        withAsync (forever $ IO.hGetLine stdO >>= IO.hPutStrLn stdout . ("[wallet] " <>)) $ \_ ->
+            withAsync (forever $ IO.hGetLine stdE >>= IO.hPutStrLn stderr . ("[wallet err] " <>)) $ \_ -> do
             waitForProcess pid
     else
        view _1 <$> readProcessWithExitCode path (map toString args) mempty
-
-
--- add prefix to log output
-tagLogOutput :: String -> String -> String
-tagLogOutput tag bs = tag <> bs
 
 ----------------------------------------------------------------------------
 -- Working with the report server
