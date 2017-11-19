@@ -6,11 +6,12 @@ flags:
 
 extra-package-dbs: []
 
-# util → core → db → [lrc, infra] → [ssc, txp, update] → lib → ...
+# [util, binary] → core → db → [lrc, infra] → [ssc, txp, update] → lib → ...
 # Then we have two branches:
 # ... → client → generator → [auxx, explorer, wallet]
 # ... → [node, tools]
 packages:
+- binary
 - util
 - core
 - db
