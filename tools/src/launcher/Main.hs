@@ -464,10 +464,14 @@ system'
     -- ^ Exit code
 system' phvar p sl = liftIO (do
     let open = do
-            (m, _, _, ph) <- Process.createProcess p
+            (m, stdO, stdE, ph) <- Process.createProcess p
             putMVar phvar ph
             case m of
-                Just hIn -> IO.hSetBuffering hIn IO.LineBuffering
+                Just hIn -> do
+                    _ <- withAsync (forever $ IO.hGetLine (fromJust stdO) >>= IO.hPutStrLn stdout . ("[node] " <>)) $ \_ ->
+                         withAsync (forever $ IO.hGetLine (fromJust stdE) >>= IO.hPutStrLn stderr . ("[node err] " <>)) $ \_ -> do
+                         waitForProcess ph
+                    IO.hSetBuffering hIn IO.LineBuffering
                 _        -> return ()
             return (m, ph)
 
